@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server'
 import SearchBar from '@/components/client/SearchBar'
 import ProductFilters from '@/components/client/ProductFilters'
 import ProductGrid from '@/components/client/ProductGrid'
+import CategoryFilter from '@/components/client/CategoryFilter'
 
 export const revalidate = 3600 // revalidate the data at most every hour
 
@@ -105,31 +106,44 @@ export default async function Home({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-center mb-8">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8">
+      <div className="mb-8">
         <Suspense fallback={<SearchBarFallback />}>
           <SearchBar />
         </Suspense>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">
-        <div className="w-full lg:w-64">
+        {/* Filters */}
+        <div className="w-full lg:w-64 flex-none space-y-8">
           <Suspense fallback={<FiltersFallback />}>
+            <CategoryFilter
+              categories={[]}
+              selectedCategory={searchParams.category}
+              totalProducts={totalProducts || 0}
+            />
             <ProductFilters
+              warehouses={[]}
+              selectedWarehouse={searchParams.warehouse}
               inStockCount={inStockCount || 0}
               outOfStockCount={outOfStockCount || 0}
+              selectedStockFilter={searchParams.stock}
             />
           </Suspense>
         </div>
 
-        <Suspense fallback={<ProductGridFallback />}>
-          <ProductGrid
-            products={products || []}
-            totalProducts={totalProducts || 0}
-            currentPage={currentPage}
-            itemsPerPage={ITEMS_PER_PAGE}
-          />
-        </Suspense>
+        {/* Products */}
+        <div className="flex-1">
+          <Suspense fallback={<ProductGridFallback />}>
+            <ProductGrid
+              products={products || []}
+              totalProducts={totalProducts || 0}
+              currentPage={currentPage}
+              itemsPerPage={ITEMS_PER_PAGE}
+              selectedSort={searchParams.sort}
+            />
+          </Suspense>
+        </div>
       </div>
     </div>
   )

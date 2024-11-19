@@ -50,16 +50,16 @@ function ResetPasswordForm({ message }: { message: Message }) {
   );
 }
 
-export default async function ResetPasswordPage({
+export default function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<Message>;
+  searchParams: Message;
 }) {
-  const message = await searchParams;
-  
   return (
-    <Suspense fallback={<FormFallback />}>
-      <ResetPasswordForm message={message} />
-    </Suspense>
+    <div className="flex min-h-screen flex-col items-center justify-center">
+      <Suspense fallback={<FormFallback />}>
+        <ResetPasswordForm message={searchParams} />
+      </Suspense>
+    </div>
   );
 }
