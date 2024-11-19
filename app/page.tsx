@@ -1,10 +1,8 @@
 import { Suspense } from 'react'
 import { createClient } from '@/utils/supabase/server'
-import ProductCard from '@/components/ProductCard'
-import SearchBar from '@/components/SearchBar'
-import CategoryFilter from '@/components/CategoryFilter'
-import Pagination from '@/components/Pagination'
-import ProductFilters from '@/components/ProductFilters'
+import SearchBar from '@/components/client/SearchBar'
+import ProductFilters from '@/components/client/ProductFilters'
+import ProductGrid from '@/components/client/ProductGrid'
 
 export const revalidate = 3600 // revalidate the data at most every hour
 
@@ -17,6 +15,22 @@ function SearchBarFallback() {
 
 function FiltersFallback() {
   return <div className="h-[400px] w-64 animate-pulse rounded-lg bg-gray-200" />
+}
+
+function ProductGridFallback() {
+  return (
+    <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {[...Array(8)].map((_, i) => (
+        <div key={i} className="animate-pulse">
+          <div className="aspect-square w-full bg-gray-200 rounded-lg" />
+          <div className="mt-4 space-y-2">
+            <div className="h-4 w-3/4 bg-gray-200 rounded" />
+            <div className="h-4 w-1/2 bg-gray-200 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default async function Home({
@@ -37,43 +51,6 @@ export default async function Home({
     .from('products')
     .select('*', { count: 'exact', head: true })
     .eq('stock', 0)
-
-  // Get unique categories directly from products table
-  const { data: categoryData } = await supabase
-    .from('products')
-    .select('category_path')
-    .not('category_path', 'is', null)
-    .not('category_path', 'eq', '')
-    .or('category_path.neq.0,category_path.neq.null')
-
-  // Create a Set for unique category paths
-  const uniquePaths = new Set<string>()
-  categoryData?.forEach(product => {
-    if (product.category_path && product.category_path.trim()) {
-      uniquePaths.add(product.category_path.trim())
-    }
-  })
-
-  // Count products for each unique category
-  const categoryMap = new Map<string, number>()
-  categoryData?.forEach(product => {
-    if (product.category_path && uniquePaths.has(product.category_path)) {
-      categoryMap.set(product.category_path, (categoryMap.get(product.category_path) || 0) + 1)
-    }
-  })
-
-  // Convert to array and sort
-  const categories = Array.from(uniquePaths)
-    .map(path => ({
-      category_path: path,
-      count: categoryMap.get(path) || 0
-    }))
-    .sort((a, b) => {
-      if (b.count !== a.count) {
-        return b.count - a.count // Sort by count first (descending)
-      }
-      return a.category_path.localeCompare(b.category_path) // Then alphabetically
-    })
 
   // Build search query
   let query = supabase
@@ -138,11 +115,6 @@ export default async function Home({
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="w-full lg:w-64">
           <Suspense fallback={<FiltersFallback />}>
-            <CategoryFilter
-              categories={categories}
-              selectedCategory={searchParams.category}
-              totalProducts={categories.reduce((sum, cat) => sum + cat.count, 0)}
-            />
             <ProductFilters
               inStockCount={inStockCount || 0}
               outOfStockCount={outOfStockCount || 0}
@@ -150,24 +122,14 @@ export default async function Home({
           </Suspense>
         </div>
 
-        <div className="flex-1">
-          <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {products?.map((product) => (
-              <ProductCard key={product.product_id} product={product} />
-            ))}
-          </div>
-
-          {totalProducts !== null && totalProducts > ITEMS_PER_PAGE && (
-            <div className="mt-8">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.ceil((totalProducts || 0) / ITEMS_PER_PAGE)}
-                itemsPerPage={ITEMS_PER_PAGE}
-                totalItems={totalProducts}
-              />
-            </div>
-          )}
-        </div>
+        <Suspense fallback={<ProductGridFallback />}>
+          <ProductGrid
+            products={products || []}
+            totalProducts={totalProducts || 0}
+            currentPage={currentPage}
+            itemsPerPage={ITEMS_PER_PAGE}
+          />
+        </Suspense>
       </div>
     </div>
   )
