@@ -1,14 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { checkEnvVars } from '@/utils/supabase/check-env-vars'
 
 // Create Supabase client with server-side environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing environment variables for Supabase')
-}
-
+const { supabaseUrl, supabaseKey } = checkEnvVars()
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function GET() {
@@ -50,7 +45,7 @@ export async function GET() {
 
     return NextResponse.json(counts)
   } catch (error) {
-    console.error('Error in warehouse counts API:', error)
+    console.error('Error in warehouse counts:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
