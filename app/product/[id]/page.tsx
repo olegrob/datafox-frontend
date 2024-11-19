@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/utils/supabase/server'
 import { notFound } from 'next/navigation'
 import ProductGallery from '@/components/ProductGallery'
@@ -88,6 +89,15 @@ const parseSpecifications = (specHtml: string | undefined) => {
 
   return groupedSpecs;
 };
+
+// Loading components
+function ImagesFallback() {
+  return <div className="aspect-square w-full animate-pulse rounded-lg bg-gray-200" />
+}
+
+function SpecsFallback() {
+  return <div className="h-[400px] w-full animate-pulse rounded-lg bg-gray-200" />
+}
 
 export default async function ProductPage({
   params: { id },
@@ -203,13 +213,15 @@ export default async function ProductPage({
         {/* Gallery and Essential Info */}
         <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-8 mb-12">
           {/* Image Gallery */}
-          <ProductGallery 
-            imageUrls={Array.isArray(product.external_image_url) ? 
-              product.external_image_url : 
-              [product.external_image_url]
-            }
-            productName={product.name}
-          />
+          <Suspense fallback={<ImagesFallback />}>
+            <ProductGallery 
+              imageUrls={Array.isArray(product.external_image_url) ? 
+                product.external_image_url : 
+                [product.external_image_url]
+              }
+              productName={product.name}
+            />
+          </Suspense>
 
           {/* Essential Product Info */}
           <div className="mt-10 px-4 sm:mt-16 sm:px-0 lg:mt-0">
@@ -270,28 +282,30 @@ export default async function ProductPage({
 
         {/* Full Width Specifications */}
         {groupedSpecs?.length > 0 && (
-          <div className="mt-12 border rounded-lg overflow-hidden bg-gray-50">
-            <div className="px-4 py-5 sm:p-6">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-6">Specifications</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {groupedSpecs?.map((group, groupIndex) => (
-                  <div key={groupIndex} className="bg-white rounded-lg p-4 shadow-sm">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4 pb-2 border-b">
-                      {group?.category || 'General'}
-                    </h3>
-                    <dl className="space-y-3">
-                      {group?.specs?.map((spec, specIndex) => spec && (
-                        <div key={specIndex} className="flex flex-col">
-                          <dt className="text-sm font-medium text-gray-500">{spec?.key}</dt>
-                          <dd className="text-sm text-gray-900 mt-1">{spec?.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                ))}
+          <Suspense fallback={<SpecsFallback />}>
+            <div className="mt-12 border rounded-lg overflow-hidden bg-gray-50">
+              <div className="px-4 py-5 sm:p-6">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-6">Specifications</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {groupedSpecs?.map((group, groupIndex) => (
+                    <div key={groupIndex} className="bg-white rounded-lg p-4 shadow-sm">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4 pb-2 border-b">
+                        {group?.category || 'General'}
+                      </h3>
+                      <dl className="space-y-3">
+                        {group?.specs?.map((spec, specIndex) => spec && (
+                          <div key={specIndex} className="flex flex-col">
+                            <dt className="text-sm font-medium text-gray-500">{spec?.key}</dt>
+                            <dd className="text-sm text-gray-900 mt-1">{spec?.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          </Suspense>
         )}
 
         {/* Description from Specifications */}

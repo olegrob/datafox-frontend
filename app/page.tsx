@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/utils/supabase/server'
 import ProductCard from '@/components/ProductCard'
 import SearchBar from '@/components/SearchBar'
@@ -8,6 +9,15 @@ import ProductFilters from '@/components/ProductFilters'
 export const revalidate = 3600 // revalidate the data at most every hour
 
 const ITEMS_PER_PAGE = 24 // Show 24 products per page (4x6 grid)
+
+// Loading components
+function SearchBarFallback() {
+  return <div className="h-10 w-full max-w-lg animate-pulse rounded-lg bg-gray-200" />
+}
+
+function FiltersFallback() {
+  return <div className="h-[400px] w-64 animate-pulse rounded-lg bg-gray-200" />
+}
 
 export default async function Home({
   searchParams,
@@ -34,7 +44,7 @@ export default async function Home({
     .select('category_path')
     .not('category_path', 'is', null)
     .not('category_path', 'eq', '')
-    .or('category_path.neq.0,category_path.neq.null') // Extra check for invalid values
+    .or('category_path.neq.0,category_path.neq.null')
 
   // Create a Set for unique category paths
   const uniquePaths = new Set<string>()
@@ -77,23 +87,6 @@ export default async function Home({
       `wpsso_product_gtin13.ilike.%${searchTerm}%`
     
     query = query.or(searchCondition)
-    
-    // Debug logging
-    console.log('Search term:', searchTerm)
-    console.log('Search condition:', searchCondition)
-    
-    // Let's also do a direct check for the EAN
-    const { data: directMatch } = await supabase
-      .from('products')
-      .select('name, wpsso_product_gtin13, wpsso_product_mfr_part_no')
-      .eq('wpsso_product_gtin13', searchTerm)
-      .limit(1)
-    
-    if (directMatch?.length) {
-      console.log('Direct EAN match found:', directMatch[0])
-    } else {
-      console.log('No direct EAN match found')
-    }
   }
 
   if (searchParams.category) {
@@ -101,60 +94,50 @@ export default async function Home({
   }
 
   if (searchParams.warehouse) {
-    query = query.ilike('warehouse', searchParams.warehouse)
+    query = query.eq('warehouse', searchParams.warehouse)
   }
 
-  if (searchParams.stock === 'in') {
+  if (searchParams.stock === 'in-stock') {
     query = query.gt('stock', 0)
-  } else if (searchParams.stock === 'out') {
+  } else if (searchParams.stock === 'out-of-stock') {
     query = query.eq('stock', 0)
   }
 
-  // Apply sorting
-  const sort = searchParams.sort || 'newest'
-  switch (sort) {
-    case 'price-desc':
-      query = query.order('price', { ascending: false })
-      break
-    case 'price-asc':
-      query = query.order('price', { ascending: true })
-      break
-    case 'name-asc':
-      query = query.order('name', { ascending: true })
-      break
-    case 'name-desc':
-      query = query.order('name', { ascending: false })
-      break
-    default: // newest first
-      query = query.order('created_at', { ascending: false })
+  // Add sorting
+  if (searchParams.sort) {
+    const [field, direction] = searchParams.sort.split('-')
+    if (field && direction) {
+      query = query.order(field, { ascending: direction === 'asc' })
+    }
+  } else {
+    // Default sorting
+    query = query.order('name', { ascending: true })
   }
 
-  // Calculate pagination
-  const start = (currentPage - 1) * ITEMS_PER_PAGE
-  const end = start + ITEMS_PER_PAGE - 1
+  // Add pagination
+  const from = (currentPage - 1) * ITEMS_PER_PAGE
+  const to = from + ITEMS_PER_PAGE - 1
+  query = query.range(from, to)
 
-  // Get total count and products
-  const { data: products, count, error } = await query.range(start, end)
+  // Execute the query
+  const { data: products, count: totalProducts, error } = await query
 
-  // Debug logging
-  console.log('Query error:', error)
-  console.log('Products count:', count)
-  console.log('First product:', products?.[0])
-
-  const totalPages = Math.ceil((count || 0) / ITEMS_PER_PAGE)
+  if (error) {
+    console.error('Error fetching products:', error)
+    throw error
+  }
 
   return (
-    <div className="bg-white">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="py-6 space-y-4">
-          <div className="flex items-center justify-center">
-            <SearchBar />
-          </div>
-        </div>
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="flex justify-center mb-8">
+        <Suspense fallback={<SearchBarFallback />}>
+          <SearchBar />
+        </Suspense>
+      </div>
 
-        <div className="flex gap-x-8">
-          {/* Filters */}
-          <div className="w-64 flex-none space-y-6">
+      <div className="flex flex-col lg:flex-row gap-8">
+        <div className="w-full lg:w-64">
+          <Suspense fallback={<FiltersFallback />}>
             <CategoryFilter
               categories={categories}
               selectedCategory={searchParams.category}
@@ -164,31 +147,26 @@ export default async function Home({
               inStockCount={inStockCount || 0}
               outOfStockCount={outOfStockCount || 0}
             />
+          </Suspense>
+        </div>
+
+        <div className="flex-1">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products?.map((product) => (
+              <ProductCard key={product.product_id} product={product} />
+            ))}
           </div>
 
-          {/* Product grid */}
-          <div className="flex-1">
-            <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {products?.map((product) => (
-                <ProductCard key={product.product_id} product={product} />
-              ))}
-              {products?.length === 0 && (
-                <div className="col-span-full py-10 text-center text-gray-500">
-                  No products found
-                </div>
-              )}
-            </div>
-
-            {/* Pagination */}
-            {count !== null && count > 0 && (
+          {totalProducts !== null && totalProducts > ITEMS_PER_PAGE && (
+            <div className="mt-8">
               <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={Math.ceil((totalProducts || 0) / ITEMS_PER_PAGE)}
                 itemsPerPage={ITEMS_PER_PAGE}
-                totalItems={count}
+                totalItems={totalProducts}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
